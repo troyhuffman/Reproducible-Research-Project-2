@@ -1,0 +1,102 @@
+---
+title: "Exploring NOAA Storm Database to Determine Most Impactful Severe Weather Events"
+author: "Troy Huffman"
+date: "2/13/2022"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+## Synopsis
+This data analysis explores the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database between 1950 and 2011 to determine which severe weather event is most harmful to the human population and its economy.Analysis detemines tornados and excessive heat are most harmful to the human population and floods and hurricanes are most harmful to its economy.
+
+## Data Processing
+R code with comments will be displayed to inform the reader of the processes
+used to perform each step of analysis.
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+Loading the NOAA storm data file and storing it in data frame format for analysis. Data file uploaded to Coursera Lab Sandbox.
+
+```{r loading-data}
+storm_data <- read.csv("repdata_data_StormData.csv.bz2")
+```
+
+Selecting the following variables in the data that are relevant to our questions:
+
+EVTYPE: Event Types
+FATALITIES: Fatalities Caused
+INJURIES: Injuries Caused
+PROPDMG: Property Damage Caused
+PROPDMGEXP: Property Damage Magnitude
+CROPDMG: Crop Damage Caused
+CROPDMGEXP: Crop Damage Magnitude
+
+```{r select-variables}
+storm_data_variables <- c("EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP" ,"CROPDMG","CROPDMGEXP")
+new_storm_data <-select(storm_data, all_of(storm_data_variables))
+```
+Some EVTYPES represent the same weather event, but are recorded as different terms. The following code ensures all weather events are represented with one matching EVTYPE.
+
+```{r one-EVTYPE}
+new_storm_data$EVTYPE[grepl("FLOOD", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "FLOOD"
+new_storm_data$EVTYPE[grepl("TORNADO", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "TORNADO"
+new_storm_data$EVTYPE[grepl("TSTM|THUNDERSTORM", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "TSTM" 
+new_storm_data$EVTYPE[grepl("TROPICAL|STORM", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "STORM"
+new_storm_data$EVTYPE[grepl("HURRICANE", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "HURRICANE"  
+new_storm_data$EVTYPE[grepl("ICE|SNOW|FROST|SLEET", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "SNOW"
+new_storm_data$EVTYPE[grepl("FOG", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "FOG"
+new_storm_data$EVTYPE[grepl("COLD|WINDCHILL|FREEZE|WINTER", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "COLD"
+new_storm_data$EVTYPE[grepl("HEAT|WARM|HOT", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "HEAT"
+new_storm_data$EVTYPE[grepl("CLOUD|FUNNEL", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "CLOUD" 
+new_storm_data$EVTYPE[grepl("HAIL", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "HAIL"
+new_storm_data$EVTYPE[grepl("DROUGHT|DRY", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "DROUGHT"
+new_storm_data$EVTYPE[grepl("LIGHTNING", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "LIGHTNING"
+new_storm_data$EVTYPE[grepl("FIRE", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "FIRE" 
+new_storm_data$EVTYPE[grepl("RAIN|SHOWER", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "RAIN"   
+new_storm_data$EVTYPE[grepl("WATERSPOUT", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "WATERSPOUT"   
+new_storm_data$EVTYPE[grepl("SURF", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "SURF"   
+new_storm_data$EVTYPE[grepl("CURRENT", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "CURRENT"    
+new_storm_data$EVTYPE[grepl("WIND|MICROBURST", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "WIND" 
+new_storm_data$EVTYPE[grepl("BLIZZARD", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "BLIZZARD"
+new_storm_data$EVTYPE[grepl("SLIDE", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "LANDSLIDE"
+new_storm_data$EVTYPE[grepl("DUST", new_storm_data$EVTYPE, ignore.case = TRUE)] <- "DUST"        
+new_storm_data$EVTYPE<-factor(new_storm_data$EVTYPE)
+```
+
+Property damage and crop damage are each represented by two variables. The following code represents the damage as a value that can be easily compared acrossed EVTYPE.
+
+```{r damage-value}
+new_storm_data$PROPDMGEXP<-recode(new_storm_data$PROPDMGEXP,'K'=1000,'M'=1000000,'B'=1000000000,.default=1)
+new_storm_data$CROPDMGEXP<-recode(new_storm_data$CROPDMGEXP,'K'=1000,'M'=1000000,'B'=1000000000,.default=1)
+new_storm_data$PROPDMGVALUE <- new_storm_data$PROPDMG*new_storm_data$PROPDMGEXP
+new_storm_data$CROPDMGVALUE <- new_storm_data$CROPDMG*new_storm_data$CROPDMGEXP
+```
+
+## Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+```{r most-harmful-pop-health}
+health<-(new_storm_data %>% group_by(EVTYPE) %>% summarise(FATALITIES = sum(FATALITIES),INJURIES = sum(INJURIES) ) %>% arrange(desc(FATALITIES+INJURIES)))
+most_harmful<-health[1:10,]
+print(most_harmful)
+plotdata<-gather(most_harmful, TYPE, VALUE, FATALITIES:INJURIES)   
+p <- ggplot(plotdata, aes(x=reorder(EVTYPE,-VALUE), y=VALUE, fill=TYPE))+geom_bar(stat="identity")+labs(title="Harmful Events to Population Health", x="Event Type", y="Count")
+p + theme(axis.text.x = element_text(angle = 90))
+```
+
+## Across the United States, which types of events have the greatest economic consequences?
+
+```{r most-harmful-economic}
+econ <-(new_storm_data %>% group_by(EVTYPE) %>% summarise(PROPDMGVALUE = sum(PROPDMGVALUE),CROPDMGVALUE = sum(CROPDMGVALUE) ) %>% arrange(desc(PROPDMGVALUE+CROPDMGVALUE)))
+most_econ<-econ[1:10,]
+print(most_econ)
+plotdata2<-gather(most_econ, TYPE, VALUE, PROPDMGVALUE:CROPDMGVALUE)  
+pe <- ggplot(plotdata2, aes(x=reorder(EVTYPE,-VALUE), y=VALUE, fill=factor(TYPE, labels=c("crop damage", "property damage"))))+geom_bar(stat="identity")+labs(title="Economically Harmful Events", x="Event Type", y="Count")+guides(fill = guide_legend(title = "Type of damage"))
+pe + theme(axis.text.x = element_text(angle = 90))
+```
+
